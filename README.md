@@ -8,7 +8,7 @@ Handoffs fail when essential operational knowledge is implicit. This action make
 
 ## What it checks
 
-Required checks cover a root README, setup/run/test guidance, CI workflow, conventional test evidence, environment guidance, and deployment guidance. Recommended checks cover lockfiles where applicable plus security, support, architecture, and limitations guidance. See [the full check rules](docs/CHECKS.md).
+Required checks cover a root README, setup/run/test guidance, CI workflow, conventional test evidence, environment guidance, and deployment guidance. Recommended checks cover lockfiles where applicable plus security, support, architecture, and limitations guidance. Two opt-in workflow-security checks are also available: explicit GitHub Actions permissions and immutable external `uses:` references. They are not enabled by default, so upgrading does not silently change existing readiness status. See [the full check rules](docs/CHECKS.md).
 
 ## Quick start
 
@@ -29,6 +29,41 @@ jobs:
 
 `contents: read` is the minimal permission. The JSON report is written in the workspace and a concise result table is added to the job summary.
 
+## Development setup
+
+Development requires Node.js 24. Install the pinned dependency graph with:
+
+```sh
+npm ci
+```
+
+This repository is a GitHub Action rather than a standalone application process, so its own readiness configuration intentionally omits `run_guidance`.
+
+## Validation
+
+Run the deterministic validation suite before changing the committed bundle:
+
+```sh
+npm run typecheck
+npm test
+npm run build
+npm audit --audit-level=high
+```
+
+CI also requires `dist/` to remain synchronized with the TypeScript source.
+
+## Environment
+
+Local development and the Action runtime require no project-specific API keys or secrets. GitHub supplies `GITHUB_WORKSPACE` and ordinary Actions context at runtime; repository scans remain local and deterministic.
+
+## Release and deployment
+
+`dist/index.js` is the committed Action artifact. Changes are reviewed through pull requests and GitHub-hosted CI. Versioned releases use semantic `v1.x.y` tags; publishing a `v1.x` release triggers the repository workflow that moves the floating `v1` major tag to the published release commit.
+
+## Architecture
+
+`src/scanner.ts` orchestrates configured checks, `src/checks.ts` contains deterministic evidence rules, `src/workflow-security.ts` handles opt-in workflow permission and immutable-reference checks, and `src/fs-safe.ts` enforces the local filesystem boundary. The scanner parses repository content as data and never executes checked-repository code.
+
 ## Report and enforce
 
 `mode: report` (the default) never fails for readiness findings. `mode: enforce` fails only when one or more required checks fail. Invalid configuration and safety-boundary errors always fail.
@@ -40,10 +75,10 @@ Optional `.delivery-readiness.yml` supports only check placement:
 ```yaml
 version: 1
 required_checks: [readme, setup_guidance]
-recommended_checks: [security_guidance]
+recommended_checks: [security_guidance, workflow_permissions, action_pinning]
 ```
 
-Unknown IDs and duplicated placement are errors. An empty `required_checks` is allowed, but means readiness cannot become `NOT_READY`; use it deliberately. Inputs are `mode`, `config-path`, and `report-path`.
+Unknown IDs and duplicated placement are errors. An empty `required_checks` is allowed, but means readiness cannot become `NOT_READY`; use it deliberately. `workflow_permissions` and `action_pinning` are optional checks that can be placed in either list. `workflow_permissions` requires an explicit non-`write-all` permission boundary at workflow level or on every job; it does not reject narrowly scoped intentional write permissions. `action_pinning` requires external actions/reusable workflows to use a full 40-character commit SHA and Docker actions to use a `sha256` digest; local `./` actions are allowed. Inputs are `mode`, `config-path`, and `report-path`.
 
 ## Outputs
 
@@ -51,7 +86,7 @@ Unknown IDs and duplicated placement are errors. An empty `required_checks` is a
 
 ## Limitations and false positives
 
-Evidence is intentionally conservative and filename/heading based. v1.0.1 expands deterministic compatibility for common setup, run, and test headings while still requiring matching command evidence in the same section. It cannot determine whether a command is correct, deployment access works, documentation is current, or tests pass. Review the report rather than treating it as a guarantee.
+Evidence is intentionally conservative and filename/heading based. v1.1.0 adds opt-in GitHub Actions permission and immutable-reference checks without changing default readiness scoring; the existing setup/run/test guidance rules remain deterministic and require matching command evidence in the same section. It cannot determine whether a command is correct, deployment access works, documentation is current, or tests pass. Review the report rather than treating it as a guarantee.
 
 ## Security and privacy
 

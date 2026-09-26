@@ -1,6 +1,8 @@
 import type { CheckId, Result, SafeFs } from './types.js';
+import { actionPinningCheck, workflowPermissionsCheck } from './workflow-security.js';
 
-const markdown = (fs: SafeFs) => fs.files.filter((file) => /(^|\/)(readme|[^/]+)\.md$/i.test(file));
+const nonGuidanceMarkdown = /^\.github\/(?:ISSUE_TEMPLATE\/|PULL_REQUEST_TEMPLATE(?:\.md|\/))/i;
+const markdown = (fs: SafeFs) => fs.files.filter((file) => /(^|\/)(readme|[^/]+)\.md$/i.test(file) && !nonGuidanceMarkdown.test(file));
 const standard: Partial<Record<CheckId, RegExp>> = {
   security_guidance: /(^|\/)security\.md$/i,
   support_guidance: /(^|\/)support\.md$/i,
@@ -126,6 +128,8 @@ export async function runCheck(fs: SafeFs, id: CheckId): Promise<{ result: Resul
     return evidence ? { result: 'PASS', evidence } : { result: 'FAIL', evidence: 'No deployment/runbook file or guidance heading' };
   }
   if (id === 'dependency_lock') return dependencyLock(fs);
+  if (id === 'workflow_permissions') return workflowPermissionsCheck(fs);
+  if (id === 'action_pinning') return actionPinningCheck(fs);
   const evidence = (standard[id] && find(fs, standard[id])) ?? await hasSection(fs, id);
   return evidence ? { result: 'PASS', evidence } : { result: 'FAIL', evidence: `No ${id.replace('_', ' ')} file or guidance heading` };
 }
